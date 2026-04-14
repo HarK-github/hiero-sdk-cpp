@@ -216,21 +216,39 @@ async function getRecommendedIssues(botContext, username, skillLevel) {
 }
 
 /**
+ * Builds a comment when no recommendations are available.
+ *
+ * @param {string} username
+ * @param {string} skillLevel
+ * @returns {string}
+ */
+function buildNoIssuesComment(username, skillLevel) {
+    return [
+        `👋 Hi @${username}! Great work on your recent contribution! 🎉`,
+        '',
+        `I couldn't find any open issues for your current level (${skillLevel}) right now.`,
+        '',
+        `Keep an eye on the issue tracker, or check back later!`,
+    ].join('\n');
+}
+
+/**
  * Main handler for issue recommendations after a PR is merged.
  *
  * - Determines skill level
  * - Fetches recommended issues
- * - Posts a comment if results exist
- *
- * Skips silently if context is incomplete or no results found.
- * Returns early on API failure .
+ * - Posts a recommendation comment if results exist
+ * - Posts a replenishment comment via {@link buildNoIssuesComment} if no results found, 
+ * logging 'recommendation.empty'
+ * * If {@link postComment} fails during the empty result flow, it logs 
+ * 'recommendation.postEmptyCommentFailed'.
  *
  * @param {{
- *   github: object,
- *   owner: string,
- *   repo: string,
- *   issue: object,
- *   sender: { login: string }
+ * github: object,
+ * owner: string,
+ * repo: string,
+ * issue: object,
+ * sender: { login: string }
  * }} botContext
  * @returns {Promise<void>}
  */
@@ -270,6 +288,14 @@ async function handleRecommendIssues(botContext) {
 
     if (issues.length === 0) {
         logger.log('recommendation.empty', { user: username });
+        const emptyComment = buildNoIssuesComment(username, skillLevel);
+        const result = await postComment(botContext, emptyComment);
+        
+        if (!result.success) {
+            logger.error('recommendation.postEmptyCommentFailed', {
+                error: result.error,
+            });
+        }
         return;
     }
 
